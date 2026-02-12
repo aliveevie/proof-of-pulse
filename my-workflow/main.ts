@@ -6,7 +6,9 @@ import {
 	CronCapability,
 	EVMClient,
 	HTTPClient,
+	HTTPCapability,
 	type EVMLog,
+	type HTTPPayload,
 	encodeCallMsg,
 	getNetwork,
 	type HTTPSendRequester,
@@ -17,199 +19,214 @@ import {
 	type Runtime,
 	TxStatus,
 } from '@chainlink/cre-sdk'
-import { type Address, decodeFunctionResult, encodeFunctionData, zeroAddress } from 'viem'
+import {
+	type Address,
+	type Hex,
+	decodeFunctionResult,
+	encodeFunctionData,
+	encodeAbiParameters,
+	parseAbiParameters,
+	concat,
+	keccak256,
+	toBytes,
+	zeroAddress,
+} from 'viem'
 import { z } from 'zod'
-import { BalanceReader, IERC20, MessageEmitter, ReserveManager } from '../contracts/abi'
+import { IERC20, AggregatorV3, WBTCProofOfReserve } from '../contracts/abi'
+import { askGemini } from './gemini'
+
+// ================================================================
+// Config
+// ================================================================
 
 const configSchema = z.object({
-	schedule: z.string(),
-	url: z.string(),
-	evms: z.array(
-		z.object({
-			tokenAddress: z.string(),
-			porAddress: z.string(),
-			proxyAddress: z.string(),
-			balanceReaderAddress: z.string(),
-			messageEmitterAddress: z.string(),
-			chainSelectorName: z.string(),
-			gasLimit: z.string(),
-		}),
-	),
+	cronSchedule: z.string(),
+	geminiModel: z.string(),
+	geminiApiUrl: z.string(),
+	blockstreamApiUrl: z.string(),
+	coingeckoApiUrl: z.string(),
+	wbtcAddress: z.string(),
+	chainlinkBtcReserveFeed: z.string(),
+	btcCustodyAddresses: z.array(z.string()),
+	mainnetChainSelectorName: z.string(),
+	sepoliaChainSelectorName: z.string(),
+	porContractAddress: z.string(),
+	gasLimit: z.string(),
+	geminiApiKey: z.string(),
 })
 
 type Config = z.infer<typeof configSchema>
 
-interface PORResponse {
-	accountName: string
-	totalTrust: number
-	totalToken: number
-	ripcord: boolean
-	updatedAt: string
+// ================================================================
+// HTTP data fetching (runs with DON consensus)
+// ================================================================
+
+interface HttpData {
+	btcReserveSats: number
+	btcUsdPriceCents: number
 }
 
-interface ReserveInfo {
-	lastUpdated: Date
-	totalReserve: number
+const fetchHttpData = (sendRequester: HTTPSendRequester, config: Config): HttpData => {
+	let totalSats = 0
+
+	for (const addr of config.btcCustodyAddresses) {
+		const resp = sendRequester
+			.sendRequest({ method: 'GET', url: `${config.blockstreamApiUrl}/address/${addr}` })
+			.result()
+
+		if (resp.statusCode !== 200) {
+			throw new Error(`Blockstream request failed for ${addr}: ${resp.statusCode}`)
+		}
+
+		const data = JSON.parse(Buffer.from(resp.body).toString('utf-8'))
+		const funded = data.chain_stats.funded_txo_sum as number
+		const spent = data.chain_stats.spent_txo_sum as number
+		totalSats += funded - spent
+	}
+
+	const priceResp = sendRequester
+		.sendRequest({
+			method: 'GET',
+			url: `${config.coingeckoApiUrl}?ids=bitcoin&vs_currencies=usd`,
+		})
+		.result()
+
+	if (priceResp.statusCode !== 200) {
+		throw new Error(`CoinGecko request failed: ${priceResp.statusCode}`)
+	}
+
+	const priceData = JSON.parse(Buffer.from(priceResp.body).toString('utf-8'))
+	const btcUsdPriceCents = Math.round(priceData.bitcoin.usd * 100)
+
+	return { btcReserveSats: totalSats, btcUsdPriceCents }
 }
 
-// Utility function to safely stringify objects with bigints
-const safeJsonStringify = (obj: any): string =>
-	JSON.stringify(obj, (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2)
+// ================================================================
+// EVM reads (mainnet)
+// ================================================================
 
-const fetchReserveInfo = (sendRequester: HTTPSendRequester, config: Config): ReserveInfo => {
-	const response = sendRequester.sendRequest({ method: 'GET', url: config.url }).result()
-
-	if (response.statusCode !== 200) {
-		throw new Error(`HTTP request failed with status: ${response.statusCode}`)
-	}
-
-	const responseText = Buffer.from(response.body).toString('utf-8')
-	const porResp: PORResponse = JSON.parse(responseText)
-
-	if (porResp.ripcord) {
-		throw new Error('ripcord is true')
-	}
-
-	return {
-		lastUpdated: new Date(porResp.updatedAt),
-		totalReserve: porResp.totalToken,
-	}
-}
-
-const fetchNativeTokenBalance = (
-	runtime: Runtime<Config>,
-	evmConfig: Config['evms'][0],
-	tokenHolderAddress: string,
-): bigint => {
+const readWbtcTotalSupply = (runtime: Runtime<Config>): bigint => {
 	const network = getNetwork({
 		chainFamily: 'evm',
-		chainSelectorName: evmConfig.chainSelectorName,
-		isTestnet: true,
+		chainSelectorName: runtime.config.mainnetChainSelectorName,
+		isTestnet: false,
 	})
 
 	if (!network) {
-		throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
+		throw new Error('Mainnet network not found')
 	}
 
 	const evmClient = new EVMClient(network.chainSelector.selector)
+	const callData = encodeFunctionData({ abi: IERC20, functionName: 'totalSupply' })
 
-	// Encode the contract call data for getNativeBalances
-	const callData = encodeFunctionData({
-		abi: BalanceReader,
-		functionName: 'getNativeBalances',
-		args: [[tokenHolderAddress as Address]],
-	})
-
-	const contractCall = evmClient
+	const result = evmClient
 		.callContract(runtime, {
 			call: encodeCallMsg({
 				from: zeroAddress,
-				to: evmConfig.balanceReaderAddress as Address,
+				to: runtime.config.wbtcAddress as Address,
 				data: callData,
 			}),
 			blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
 		})
 		.result()
 
-	// Decode the result
-	const balances = decodeFunctionResult({
-		abi: BalanceReader,
-		functionName: 'getNativeBalances',
-		data: bytesToHex(contractCall.data),
+	return decodeFunctionResult({
+		abi: IERC20,
+		functionName: 'totalSupply',
+		data: bytesToHex(result.data),
 	})
-
-	if (!balances || balances.length === 0) {
-		throw new Error('No balances returned from contract')
-	}
-
-	return balances[0]
 }
 
-const getTotalSupply = (runtime: Runtime<Config>): bigint => {
-	const evms = runtime.config.evms
-	let totalSupply = 0n
-
-	for (const evmConfig of evms) {
-		const network = getNetwork({
-			chainFamily: 'evm',
-			chainSelectorName: evmConfig.chainSelectorName,
-			isTestnet: true,
-		})
-
-		if (!network) {
-			throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
-		}
-
-		const evmClient = new EVMClient(network.chainSelector.selector)
-
-		// Encode the contract call data for totalSupply
-		const callData = encodeFunctionData({
-			abi: IERC20,
-			functionName: 'totalSupply',
-		})
-
-		const contractCall = evmClient
-			.callContract(runtime, {
-				call: encodeCallMsg({
-					from: zeroAddress,
-					to: evmConfig.tokenAddress as Address,
-					data: callData,
-				}),
-				blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-			})
-			.result()
-
-		// Decode the result
-		const supply = decodeFunctionResult({
-			abi: IERC20,
-			functionName: 'totalSupply',
-			data: bytesToHex(contractCall.data),
-		})
-
-		totalSupply += supply
-	}
-
-	return totalSupply
-}
-
-const updateReserves = (
-	runtime: Runtime<Config>,
-	totalSupply: bigint,
-	totalReserveScaled: bigint,
-): string => {
-	const evmConfig = runtime.config.evms[0]
+const readChainlinkReserve = (runtime: Runtime<Config>): bigint => {
 	const network = getNetwork({
 		chainFamily: 'evm',
-		chainSelectorName: evmConfig.chainSelectorName,
+		chainSelectorName: runtime.config.mainnetChainSelectorName,
+		isTestnet: false,
+	})
+
+	if (!network) {
+		throw new Error('Mainnet network not found')
+	}
+
+	const evmClient = new EVMClient(network.chainSelector.selector)
+	const callData = encodeFunctionData({ abi: AggregatorV3, functionName: 'latestRoundData' })
+
+	const result = evmClient
+		.callContract(runtime, {
+			call: encodeCallMsg({
+				from: zeroAddress,
+				to: runtime.config.chainlinkBtcReserveFeed as Address,
+				data: callData,
+			}),
+			blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+		})
+		.result()
+
+	const decoded = decodeFunctionResult({
+		abi: AggregatorV3,
+		functionName: 'latestRoundData',
+		data: bytesToHex(result.data),
+	})
+
+	const answer = decoded[1]
+	return answer >= 0n ? answer : 0n
+}
+
+// ================================================================
+// Report encoding
+// ================================================================
+
+const encodeReserveReport = (data: {
+	btcReserveSats: bigint
+	wbtcSupplySats: bigint
+	collateralRatioBps: bigint
+	btcUsdPriceCents: bigint
+	chainlinkReserveSats: bigint
+	timestamp: bigint
+}): Hex => {
+	const encoded = encodeAbiParameters(
+		parseAbiParameters('uint256, uint256, uint256, uint256, uint256, uint256'),
+		[
+			data.btcReserveSats,
+			data.wbtcSupplySats,
+			data.collateralRatioBps,
+			data.btcUsdPriceCents,
+			data.chainlinkReserveSats,
+			data.timestamp,
+		],
+	)
+	return concat(['0x01', encoded])
+}
+
+const encodeRiskReport = (score: number, recommendation: string, timestamp: bigint): Hex => {
+	const encoded = encodeAbiParameters(parseAbiParameters('uint8, string, uint256'), [
+		score,
+		recommendation,
+		timestamp,
+	])
+	return concat(['0x02', encoded])
+}
+
+// ================================================================
+// Write report to Sepolia
+// ================================================================
+
+const writeReportToSepolia = (runtime: Runtime<Config>, payload: Hex): void => {
+	const network = getNetwork({
+		chainFamily: 'evm',
+		chainSelectorName: runtime.config.sepoliaChainSelectorName,
 		isTestnet: true,
 	})
 
 	if (!network) {
-		throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
+		throw new Error('Sepolia network not found')
 	}
 
 	const evmClient = new EVMClient(network.chainSelector.selector)
 
-	runtime.log(
-		`Updating reserves totalSupply ${totalSupply.toString()} totalReserveScaled ${totalReserveScaled.toString()}`,
-	)
-
-	// Encode the contract call data for updateReserves
-	const callData = encodeFunctionData({
-		abi: ReserveManager,
-		functionName: 'updateReserves',
-		args: [
-			{
-				totalMinted: totalSupply,
-				totalReserve: totalReserveScaled,
-			},
-		],
-	})
-
-	// Step 1: Generate report using consensus capability
 	const reportResponse = runtime
 		.report({
-			encodedPayload: hexToBase64(callData),
+			encodedPayload: hexToBase64(payload),
 			encoderName: 'evm',
 			signingAlgo: 'ecdsa',
 			hashingAlgo: 'keccak256',
@@ -218,173 +235,190 @@ const updateReserves = (
 
 	const resp = evmClient
 		.writeReport(runtime, {
-			receiver: evmConfig.proxyAddress,
+			receiver: runtime.config.porContractAddress,
 			report: reportResponse,
-			gasConfig: {
-				gasLimit: evmConfig.gasLimit,
-			},
+			gasConfig: { gasLimit: runtime.config.gasLimit },
 		})
 		.result()
 
-	const txStatus = resp.txStatus
-
-	if (txStatus !== TxStatus.SUCCESS) {
-		throw new Error(`Failed to write report: ${resp.errorMessage || txStatus}`)
+	if (resp.txStatus !== TxStatus.SUCCESS) {
+		throw new Error(`Failed to write report: ${resp.errorMessage || resp.txStatus}`)
 	}
 
-	const txHash = resp.txHash || new Uint8Array(32)
-
-	runtime.log(`Write report transaction succeeded at txHash: ${bytesToHex(txHash)}`)
-
-	return txHash.toString()
+	runtime.log(`Report written: ${bytesToHex(resp.txHash || new Uint8Array(32))}`)
 }
 
-const doPOR = (runtime: Runtime<Config>): string => {
-	runtime.log(`fetching por url ${runtime.config.url}`)
+// ================================================================
+// Core PoR computation
+// ================================================================
 
-	const httpCapability = new HTTPClient()
-	const reserveInfo = httpCapability
+const computeAndWritePoR = (runtime: Runtime<Config>): string => {
+	runtime.log('Fetching BTC reserves and price...')
+
+	const httpClient = new HTTPClient()
+	const httpData = httpClient
 		.sendRequest(
 			runtime,
-			fetchReserveInfo,
-			ConsensusAggregationByFields<ReserveInfo>({
-				lastUpdated: median,
-				totalReserve: median,
+			fetchHttpData,
+			ConsensusAggregationByFields<HttpData>({
+				btcReserveSats: median,
+				btcUsdPriceCents: median,
 			}),
 		)(runtime.config)
 		.result()
 
-	runtime.log(`ReserveInfo ${safeJsonStringify(reserveInfo)}`)
-
-	const totalSupply = getTotalSupply(runtime)
-	runtime.log(`TotalSupply ${totalSupply.toString()}`)
-
-	const totalReserveScaled = BigInt(reserveInfo.totalReserve * 1e18)
-	runtime.log(`TotalReserveScaled ${totalReserveScaled.toString()}`)
-
-	const nativeTokenBalance = fetchNativeTokenBalance(
-		runtime,
-		runtime.config.evms[0],
-		runtime.config.evms[0].tokenAddress,
+	runtime.log(
+		`BTC reserves: ${httpData.btcReserveSats} sats, price: ${httpData.btcUsdPriceCents} cents`,
 	)
-	runtime.log(`NativeTokenBalance ${nativeTokenBalance.toString()}`)
 
-	updateReserves(runtime, totalSupply, totalReserveScaled)
+	const wbtcSupply = readWbtcTotalSupply(runtime)
+	runtime.log(`WBTC supply: ${wbtcSupply.toString()}`)
 
-	return reserveInfo.totalReserve.toString()
+	const chainlinkReserve = readChainlinkReserve(runtime)
+	runtime.log(`Chainlink reserve: ${chainlinkReserve.toString()}`)
+
+	const btcReserveSats = BigInt(httpData.btcReserveSats)
+	const collateralRatioBps = wbtcSupply > 0n ? (btcReserveSats * 10000n) / wbtcSupply : 0n
+	const timestamp = BigInt(Math.floor(runtime.now().getTime() / 1000))
+
+	runtime.log(`Collateral ratio: ${collateralRatioBps.toString()} bps`)
+
+	const payload = encodeReserveReport({
+		btcReserveSats,
+		wbtcSupplySats: wbtcSupply,
+		collateralRatioBps,
+		btcUsdPriceCents: BigInt(httpData.btcUsdPriceCents),
+		chainlinkReserveSats: chainlinkReserve,
+		timestamp,
+	})
+
+	writeReportToSepolia(runtime, payload)
+
+	return `PoR updated: ratio=${collateralRatioBps.toString()}bps`
 }
 
-const getLastMessage = (
-	runtime: Runtime<Config>,
-	evmConfig: Config['evms'][0],
-	emitter: string,
-): string => {
-	const network = getNetwork({
-		chainFamily: 'evm',
-		chainSelectorName: evmConfig.chainSelectorName,
-		isTestnet: true,
-	})
-
-	if (!network) {
-		throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
-	}
-
-	const evmClient = new EVMClient(network.chainSelector.selector)
-
-	// Encode the contract call data for getLastMessage
-	const callData = encodeFunctionData({
-		abi: MessageEmitter,
-		functionName: 'getLastMessage',
-		args: [emitter as Address],
-	})
-
-	const contractCall = evmClient
-		.callContract(runtime, {
-			call: encodeCallMsg({
-				from: zeroAddress,
-				to: evmConfig.messageEmitterAddress as Address,
-				data: callData,
-			}),
-			blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-		})
-		.result()
-
-	// Decode the result
-	const message = decodeFunctionResult({
-		abi: MessageEmitter,
-		functionName: 'getLastMessage',
-		data: bytesToHex(contractCall.data),
-	})
-
-	return message
-}
+// ================================================================
+// Handler 1: Cron trigger (hourly PoR update)
+// ================================================================
 
 const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
 	if (!payload.scheduledExecutionTime) {
 		throw new Error('Scheduled execution time is required')
 	}
 
-	runtime.log('Running CronTrigger')
-
-	return doPOR(runtime)
+	runtime.log('Running CronTrigger — hourly PoR update')
+	return computeAndWritePoR(runtime)
 }
+
+// ================================================================
+// Handler 2: Log trigger (audit request → Gemini AI risk analysis)
+// ================================================================
 
 const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string => {
-	runtime.log('Running LogTrigger')
+	runtime.log('Running LogTrigger — audit request')
 
-	const topics = payload.topics
+	const auditId =
+		payload.topics.length > 1 ? bytesToHex(payload.topics[1]) : '0x0'
+	runtime.log(`Audit ID: ${auditId}`)
 
-	if (topics.length < 3) {
-		runtime.log('Log payload does not contain enough topics')
-		throw new Error(`log payload does not contain enough topics ${topics.length}`)
-	}
+	// Fetch fresh BTC reserves + price via HTTP
+	const httpClient = new HTTPClient()
+	const httpData = httpClient
+		.sendRequest(
+			runtime,
+			fetchHttpData,
+			ConsensusAggregationByFields<HttpData>({
+				btcReserveSats: median,
+				btcUsdPriceCents: median,
+			}),
+		)(runtime.config)
+		.result()
 
-	// topics[1] is a 32-byte topic, but the address is the last 20 bytes
-	const emitter = bytesToHex(topics[1].slice(12))
-	runtime.log(`Emitter ${emitter}`)
+	runtime.log(
+		`BTC reserves: ${httpData.btcReserveSats} sats, price: ${httpData.btcUsdPriceCents} cents`,
+	)
 
-	const message = getLastMessage(runtime, runtime.config.evms[0], emitter)
+	// Read WBTC supply + Chainlink reserve from mainnet
+	const wbtcSupply = readWbtcTotalSupply(runtime)
+	const chainlinkReserve = readChainlinkReserve(runtime)
+	const btcReserveSats = BigInt(httpData.btcReserveSats)
+	const collateralRatioBps = wbtcSupply > 0n ? (btcReserveSats * 10000n) / wbtcSupply : 0n
 
-	runtime.log(`Message retrieved from the contract ${message}`)
+	runtime.log(`WBTC supply: ${wbtcSupply.toString()}, ratio: ${collateralRatioBps.toString()} bps`)
 
-	return message
+	// Build Gemini prompt
+	const prompt = `You are a WBTC Proof of Reserve auditor. Analyze the following data and provide a risk assessment.
+
+BTC reserve from Blockstream (sats): ${httpData.btcReserveSats}
+WBTC supply on Ethereum (sats): ${wbtcSupply.toString()}
+Collateral ratio (bps, 10000=100%): ${collateralRatioBps.toString()}
+Chainlink PoR reserve (sats): ${chainlinkReserve.toString()}
+BTC price (USD cents): ${httpData.btcUsdPriceCents}
+
+Respond in EXACTLY this format (two lines only):
+score: <number 0-100 where 0=safe 100=critical>
+recommendation: <one sentence recommendation>`
+
+	const riskResult = askGemini(runtime, runtime.config.geminiApiUrl, runtime.config.geminiApiKey, prompt)
+	runtime.log(`Gemini risk: score=${riskResult.score}, rec="${riskResult.recommendation}"`)
+
+	// Encode and write risk report
+	const timestamp = BigInt(Math.floor(runtime.now().getTime() / 1000))
+	const riskPayload = encodeRiskReport(riskResult.score, riskResult.recommendation, timestamp)
+	writeReportToSepolia(runtime, riskPayload)
+
+	return `Audit complete: score=${riskResult.score}`
 }
+
+// ================================================================
+// Handler 3: HTTP trigger (on-demand PoR update)
+// ================================================================
+
+const onHttpTrigger = (runtime: Runtime<Config>, _payload: HTTPPayload): string => {
+	runtime.log('Running HTTP trigger — on-demand PoR update')
+	return computeAndWritePoR(runtime)
+}
+
+// ================================================================
+// Workflow initialization
+// ================================================================
 
 const initWorkflow = (config: Config) => {
 	const cronTrigger = new CronCapability()
-	const network = getNetwork({
+	const httpTrigger = new HTTPCapability()
+
+	const sepoliaNetwork = getNetwork({
 		chainFamily: 'evm',
-		chainSelectorName: config.evms[0].chainSelectorName,
+		chainSelectorName: config.sepoliaChainSelectorName,
 		isTestnet: true,
 	})
 
-	if (!network) {
-		throw new Error(
-			`Network not found for chain selector name: ${config.evms[0].chainSelectorName}`,
-		)
+	if (!sepoliaNetwork) {
+		throw new Error('Sepolia network not found')
 	}
 
-	const evmClient = new EVMClient(network.chainSelector.selector)
+	const sepoliaClient = new EVMClient(sepoliaNetwork.chainSelector.selector)
+
+	const auditEventSig = keccak256(toBytes('AuditRequested(uint256)'))
 
 	return [
+		handler(cronTrigger.trigger({ schedule: config.cronSchedule }), onCronTrigger),
 		handler(
-			cronTrigger.trigger({
-				schedule: config.schedule,
-			}),
-			onCronTrigger,
-		),
-		handler(
-			evmClient.logTrigger({
-				addresses: [config.evms[0].messageEmitterAddress],
+			sepoliaClient.logTrigger({
+				addresses: [config.porContractAddress],
+				topics: [{ values: [auditEventSig] }],
 			}),
 			onLogTrigger,
 		),
+		handler(httpTrigger.trigger({}), onHttpTrigger),
 	]
 }
 
+// ================================================================
+// Entry point
+// ================================================================
+
 export async function main() {
-	const runner = await Runner.newRunner<Config>({
-		configSchema,
-	})
+	const runner = await Runner.newRunner<Config>({ configSchema })
 	await runner.run(initWorkflow)
 }
