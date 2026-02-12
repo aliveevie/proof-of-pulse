@@ -11,7 +11,8 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "main.ts"
+    "main.ts",
+    "gemini.ts"
   ]
 }
 
