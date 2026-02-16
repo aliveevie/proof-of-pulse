@@ -1,11 +1,13 @@
 *.env
 .env
 .env.*
+.env.tenderly
 node_modules/
 my-workflow/.cre/
 contracts/out/
 contracts/cache/
 .DS_Store
+*.bak
 my-workflow/config.staging.json
 my-workflow/config.production.json
 CLAUDE.MD
