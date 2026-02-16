@@ -9,3 +9,6 @@ contracts/cache/
 my-workflow/config.staging.json
 my-workflow/config.production.json
 CLAUDE.MD
+DEMO_SCRIPT.md
+implementation.md
+proof-pulse-demo.mov
