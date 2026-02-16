@@ -27,7 +27,7 @@ export const askGemini = (
 				try {
 					const body = JSON.stringify({
 						contents: [{ parts: [{ text: promptText }] }],
-						generationConfig: { temperature: 0, maxOutputTokens: 256 },
+						generationConfig: { temperature: 0, maxOutputTokens: 1024 },
 					})
 
 					const response = sendRequester
@@ -40,27 +40,49 @@ export const askGemini = (
 						.result()
 
 					if (response.statusCode !== 200) {
+						runtime.log(`Gemini API error: HTTP ${response.statusCode}`)
 						return {
-							score: 50,
-							recommendation: `Gemini API returned ${response.statusCode}, using default assessment`,
+							score: 0,
+							recommendation: `[API error ${response.statusCode}] Unable to perform AI risk assessment`,
 						}
 					}
 
 					const responseText = Buffer.from(response.body).toString('utf-8')
 					const parsed = JSON.parse(responseText)
+
+					if (
+						!parsed.candidates ||
+						!Array.isArray(parsed.candidates) ||
+						parsed.candidates.length === 0 ||
+						!parsed.candidates[0].content?.parts?.[0]?.text
+					) {
+						runtime.log('Gemini returned unexpected response structure')
+						return {
+							score: 0,
+							recommendation: '[Parse error] Gemini returned unexpected response format',
+						}
+					}
+
 					const content: string = parsed.candidates[0].content.parts[0].text
 
 					const scoreMatch = content.match(/score[:\s]*(\d+)/i)
-					const score = scoreMatch ? parseInt(scoreMatch[1]) : 50
+					let score = scoreMatch ? parseInt(scoreMatch[1]) : 0
+
+					// Clamp score to valid range (0 = safe, 100 = critical)
+					score = Math.max(0, Math.min(100, score))
 
 					const recMatch = content.match(/recommendation[:\s]*(.*?)(?:\n|$)/i)
-					const recommendation = recMatch ? recMatch[1].trim() : content.substring(0, 200)
+					const recommendation = recMatch && recMatch[1].trim().length > 0
+						? recMatch[1].trim().substring(0, 256)
+						: content.substring(0, 200).trim()
 
 					return { score, recommendation }
-				} catch {
+				} catch (err) {
+					const errMsg = err instanceof Error ? err.message : 'unknown error'
+					runtime.log(`Gemini integration error: ${errMsg}`)
 					return {
-						score: 50,
-						recommendation: 'Gemini API unavailable, using default assessment',
+						score: 0,
+						recommendation: `[Error] AI risk assessment unavailable: ${errMsg}`,
 					}
 				}
 			},

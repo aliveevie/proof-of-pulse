@@ -79,9 +79,16 @@ const fetchHttpData = (sendRequester: HTTPSendRequester, config: Config): HttpDa
 		}
 
 		const data = JSON.parse(Buffer.from(resp.body).toString('utf-8'))
+		if (!data.chain_stats || typeof data.chain_stats.funded_txo_sum !== 'number' || typeof data.chain_stats.spent_txo_sum !== 'number') {
+			throw new Error(`Blockstream returned unexpected data structure for ${addr}`)
+		}
 		const funded = data.chain_stats.funded_txo_sum as number
 		const spent = data.chain_stats.spent_txo_sum as number
-		totalSats += funded - spent
+		const balance = funded - spent
+		if (balance < 0) {
+			throw new Error(`Negative balance for ${addr}: funded=${funded}, spent=${spent}`)
+		}
+		totalSats += balance
 	}
 
 	const priceResp = sendRequester
@@ -96,6 +103,9 @@ const fetchHttpData = (sendRequester: HTTPSendRequester, config: Config): HttpDa
 	}
 
 	const priceData = JSON.parse(Buffer.from(priceResp.body).toString('utf-8'))
+	if (!priceData.bitcoin || typeof priceData.bitcoin.usd !== 'number' || priceData.bitcoin.usd <= 0) {
+		throw new Error('CoinGecko returned invalid BTC price data')
+	}
 	const btcUsdPriceCents = Math.round(priceData.bitcoin.usd * 100)
 
 	return { btcReserveSats: totalSats, btcUsdPriceCents }
