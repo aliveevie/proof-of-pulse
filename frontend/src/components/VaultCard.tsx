@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import type { VaultData } from "../hooks/useContracts";
+import { GUARD_ADDRESS } from "../config/contracts";
 
 interface Props {
   vault: VaultData | null;
@@ -71,7 +72,7 @@ export function VaultCard({ vault, account, walletBalance, onDeposit, onWithdraw
       ) : (
         <>
           <div className="metric" style={{ marginBottom: 8 }}>
-            <div className="label">Your Wallet (Sepolia)</div>
+            <div className="label">Your Wallet</div>
             <div className="value sm">{Number(walletBalance).toFixed(4)} ETH</div>
             <div className="addr">
               {account.slice(0, 8)}...{account.slice(-6)}
@@ -98,10 +99,7 @@ export function VaultCard({ vault, account, walletBalance, onDeposit, onWithdraw
       )}
 
       <div className="addr" style={{ marginTop: 8 }}>
-        PulseGuard:{" "}
-        <a href="https://sepolia.etherscan.io/address/0x887dC9BF62755dCbb0A3d93028fCAd741585106E" target="_blank" rel="noreferrer">
-          0x887dC9...106E
-        </a>
+        PulseGuard: {GUARD_ADDRESS.slice(0, 8)}...{GUARD_ADDRESS.slice(-6)}
       </div>
     </div>
   );
