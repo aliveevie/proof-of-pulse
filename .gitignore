@@ -8,3 +8,4 @@ contracts/cache/
 .DS_Store
 my-workflow/config.staging.json
 my-workflow/config.production.json
+CLAUDE.MD
