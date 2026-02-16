@@ -1,7 +1,7 @@
 {
   "cronSchedule": "0 * * * *",
-  "geminiModel": "gemini-2.0-flash",
-  "geminiApiUrl": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+  "geminiModel": "gemini-2.5-flash",
+  "geminiApiUrl": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
   "blockstreamApiUrl": "https://blockstream.info/api",
   "coingeckoApiUrl": "https://api.coingecko.com/api/v3/simple/price",
   "wbtcAddress": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
