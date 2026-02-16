@@ -5,6 +5,7 @@ import { VaultCard } from "./components/VaultCard";
 import { HistoryChart } from "./components/HistoryChart";
 import { ContractExplorer } from "./components/ContractExplorer";
 import { ActivityLog } from "./components/ActivityLog";
+import { TenderlySimulator } from "./components/TenderlySimulator";
 
 export default function App() {
   const {
@@ -32,7 +33,7 @@ export default function App() {
         <h1>
           Proof<span className="accent">Pulse</span>
         </h1>
-        <p>Cross-Chain WBTC Proof of Reserve & DeFi Circuit Breaker — Live on Sepolia</p>
+        <p>Cross-Chain WBTC Proof of Reserve & DeFi Circuit Breaker — Powered by Tenderly Virtual TestNet</p>
         {reserve && (
           <div className="header-status">
             <span className={`status-dot ${reserve.collateralRatioBps >= 9900 ? "dot-green" : "dot-red"}`} />
@@ -60,6 +61,7 @@ export default function App() {
           onCheckHealth={checkHealth}
           onConnect={connectWallet}
         />
+        <TenderlySimulator account={account} />
         <HistoryChart history={history} />
         <ContractExplorer
           reserve={reserve}
