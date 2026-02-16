@@ -1,8 +1,8 @@
-export const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+export const SEPOLIA_RPC = "https://virtual.sepolia.eu.rpc.tenderly.co/edfcf111-7230-4890-a00d-6955af566bb9";
 export const SEPOLIA_CHAIN_ID = 11155111;
 
-export const POR_ADDRESS = "0x4177bF2196151A05A51f7928988afd3Fe7B6e949";
-export const GUARD_ADDRESS = "0x887dC9BF62755dCbb0A3d93028fCAd741585106E";
+export const POR_ADDRESS = "0x3C4f266542EEE824303F39189CdeBF9530FEFd73";
+export const GUARD_ADDRESS = "0x97999Af8E10B03A5f8eC8bC8ADFF7B0679b6EA11";
 
 export const POR_ABI = [
   "function getLatestReserve() view returns (uint256 btcReserveSats, uint256 wbtcSupplySats, uint256 collateralRatioBps, uint256 btcUsdPriceCents, uint256 chainlinkReserveSats, uint256 timestamp)",
