@@ -2,6 +2,10 @@
 src = "src"
 out = "out"
 libs = ["lib", "node_modules"]
+script = "script"
 remappings = [
     "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/"
 ]
+
+[etherscan]
+tenderly = { key = "${TENDERLY_ACCESS_KEY}", chain = 11155111, url = "${TENDERLY_VIRTUAL_TESTNET_RPC_URL}/verify/etherscan" }
