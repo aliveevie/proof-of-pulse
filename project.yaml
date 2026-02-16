@@ -27,7 +27,7 @@
 staging-settings:
   rpcs:
     - chain-name: ethereum-testnet-sepolia
-      url: https://ethereum-sepolia-rpc.publicnode.com
+      url: https://virtual.sepolia.eu.rpc.tenderly.co/edfcf111-7230-4890-a00d-6955af566bb9
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
 
