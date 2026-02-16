@@ -11,7 +11,7 @@
   ],
   "mainnetChainSelectorName": "ethereum-mainnet",
   "sepoliaChainSelectorName": "ethereum-testnet-sepolia",
-  "porContractAddress": "0x4177bF2196151A05A51f7928988afd3Fe7B6e949",
+  "porContractAddress": "0x3C4f266542EEE824303F39189CdeBF9530FEFd73",
   "gasLimit": "500000",
   "geminiApiKey": "AIzaSyCjj4jocfqaOAJf_r7-hpTkgexdl0Dhgas"
 }
