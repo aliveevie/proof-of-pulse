@@ -16875,7 +16875,7 @@ var askGemini = (runtime2, geminiApiUrl, geminiApiKey, prompt) => {
     try {
       const body = JSON.stringify({
         contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 256 }
+        generationConfig: { temperature: 0, maxOutputTokens: 1024 }
       });
       const response = sendRequester.sendRequest({
         method: "POST",
@@ -16884,23 +16884,34 @@ var askGemini = (runtime2, geminiApiUrl, geminiApiKey, prompt) => {
         body: Buffer.from(body).toString("base64")
       }).result();
       if (response.statusCode !== 200) {
+        runtime2.log(`Gemini API error: HTTP ${response.statusCode}`);
         return {
-          score: 50,
-          recommendation: `Gemini API returned ${response.statusCode}, using default assessment`
+          score: 0,
+          recommendation: `[API error ${response.statusCode}] Unable to perform AI risk assessment`
         };
       }
       const responseText = Buffer.from(response.body).toString("utf-8");
       const parsed = JSON.parse(responseText);
+      if (!parsed.candidates || !Array.isArray(parsed.candidates) || parsed.candidates.length === 0 || !parsed.candidates[0].content?.parts?.[0]?.text) {
+        runtime2.log("Gemini returned unexpected response structure");
+        return {
+          score: 0,
+          recommendation: "[Parse error] Gemini returned unexpected response format"
+        };
+      }
       const content = parsed.candidates[0].content.parts[0].text;
       const scoreMatch = content.match(/score[:\s]*(\d+)/i);
-      const score = scoreMatch ? parseInt(scoreMatch[1]) : 50;
+      let score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+      score = Math.max(0, Math.min(100, score));
       const recMatch = content.match(/recommendation[:\s]*(.*?)(?:\n|$)/i);
-      const recommendation = recMatch ? recMatch[1].trim() : content.substring(0, 200);
+      const recommendation = recMatch && recMatch[1].trim().length > 0 ? recMatch[1].trim().substring(0, 256) : content.substring(0, 200).trim();
       return { score, recommendation };
-    } catch {
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "unknown error";
+      runtime2.log(`Gemini integration error: ${errMsg}`);
       return {
-        score: 50,
-        recommendation: "Gemini API unavailable, using default assessment"
+        score: 0,
+        recommendation: `[Error] AI risk assessment unavailable: ${errMsg}`
       };
     }
   }, ConsensusAggregationByFields({
@@ -16931,9 +16942,16 @@ var fetchHttpData = (sendRequester, config) => {
       throw new Error(`Blockstream request failed for ${addr}: ${resp.statusCode}`);
     }
     const data = JSON.parse(Buffer.from(resp.body).toString("utf-8"));
+    if (!data.chain_stats || typeof data.chain_stats.funded_txo_sum !== "number" || typeof data.chain_stats.spent_txo_sum !== "number") {
+      throw new Error(`Blockstream returned unexpected data structure for ${addr}`);
+    }
     const funded = data.chain_stats.funded_txo_sum;
     const spent = data.chain_stats.spent_txo_sum;
-    totalSats += funded - spent;
+    const balance = funded - spent;
+    if (balance < 0) {
+      throw new Error(`Negative balance for ${addr}: funded=${funded}, spent=${spent}`);
+    }
+    totalSats += balance;
   }
   const priceResp = sendRequester.sendRequest({
     method: "GET",
@@ -16943,6 +16961,9 @@ var fetchHttpData = (sendRequester, config) => {
     throw new Error(`CoinGecko request failed: ${priceResp.statusCode}`);
   }
   const priceData = JSON.parse(Buffer.from(priceResp.body).toString("utf-8"));
+  if (!priceData.bitcoin || typeof priceData.bitcoin.usd !== "number" || priceData.bitcoin.usd <= 0) {
+    throw new Error("CoinGecko returned invalid BTC price data");
+  }
   const btcUsdPriceCents = Math.round(priceData.bitcoin.usd * 100);
   return { btcReserveSats: totalSats, btcUsdPriceCents };
 };
