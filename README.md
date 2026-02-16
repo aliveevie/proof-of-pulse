@@ -24,6 +24,73 @@ WBTC holds billions in value as the leading wrapped BTC on Ethereum, yet verifyi
 
 The frontend dashboard is a React + Vite app in [`frontend/`](frontend/). Run `cd frontend && npm install && npm run dev` to start it locally, then connect MetaMask to Sepolia to interact with the live contracts.
 
+## Tenderly Virtual TestNet
+
+ProofPulse supports deployment to a [Tenderly Virtual TestNet](https://docs.tenderly.co/virtual-testnets) — a fork of Sepolia with a built-in block explorer, contract verification, and unlimited faucet. This is ideal for testing the full CRE workflow end-to-end without spending real testnet ETH.
+
+### Prerequisites
+
+- **Tenderly Access Key** — Sign up at [dashboard.tenderly.co/register](https://dashboard.tenderly.co/register), then go to **Settings → Authorization → Generate Access Token**
+- Add to `.env`: `TENDERLY_ACCESS_KEY=your_token_here`
+
+### Quick Start
+
+```bash
+# 1. Create VNet, fund wallet, deploy + verify contracts
+./setup-tenderly.sh
+
+# 2. Load the Tenderly environment (RPC, contract addresses)
+source .env.tenderly
+
+# 3. Run the full 3-handler CRE workflow against Tenderly
+./simulate-workflow.sh --broadcast
+```
+
+The setup script will print a **Tenderly Explorer link** where you can view all transactions and verified contract source code.
+
+### How It Works
+
+- **Reads** (WBTC `totalSupply()`, Chainlink feed, Blockstream, CoinGecko) → **real Ethereum Mainnet** (unchanged)
+- **Writes** (reserve reports, risk assessments) → **Tenderly VNet** (forked Sepolia)
+
+When you `source .env.tenderly`, the `simulate-workflow.sh` script automatically uses the Tenderly RPC and contract addresses instead of Sepolia defaults. To also update `project.yaml`, `config.staging.json`, and the frontend config, run:
+
+```bash
+./setup-tenderly.sh --update-configs
+```
+
+This creates `.bak` backups of all modified files.
+
+### Deep Tenderly Integrations
+
+#### Transaction Simulator (Frontend)
+
+The dashboard includes a **Tenderly VNet Transaction Simulator** — a purple-themed card that previews any PulseGuard transaction before executing it on-chain. Select Deposit / Withdraw / Check Health, and the simulator runs a full EVM `eth_call` against the Tenderly VNet to show:
+
+- Whether the transaction would **succeed or revert**
+- **Decoded revert reasons** (e.g., `ReservesUnhealthy`, `CircuitBreakerIsActive`)
+- **Gas estimates** for successful transactions
+- **Live contract state** (depositsAllowed, isHealthy, collateral ratio, risk score, vault total)
+
+This demonstrates why Tenderly VNets are superior to regular testnets: full EVM simulation with zero gas cost and no state changes.
+
+#### Edge Case Testing with State Overrides
+
+```bash
+./test-edge-cases.sh
+```
+
+Uses `eth_call` state overrides (a Tenderly VNet capability) to test scenarios that are **impossible on regular Sepolia**:
+
+| Scenario | Override | Result |
+|----------|----------|--------|
+| **Undercollateralization** | `collateralRatioBps → 5000 (50%)` | `isHealthy()=false`, deposits blocked, deposit() reverts |
+| **AI Risk Spike** | `latestRisk.score → 95` | `checkHealth()` would trip circuit breaker |
+| **Combined Stress** | Both overrides simultaneously | Multi-layer protection validated |
+| **State Verification** | None | Confirms actual VNet state is unchanged |
+
+No mock contracts needed. No state mutations. The script directly overrides storage slots in `eth_call` to validate PulseGuard's circuit breaker protection against compound failures — then proves the real state was never touched.
+
 ## Architecture
 
 ```
@@ -333,6 +400,7 @@ Open `http://localhost:5173` in a browser. Connect MetaMask to Sepolia to intera
 - **Reserve Health** — Collateral ratio with progress bar, BTC reserves vs WBTC supply, Chainlink comparison, health badge
 - **AI Risk Assessment** — Gemini risk score meter (0-100), recommendation text, Request AI Audit button
 - **PulseGuard Vault** — Deposit/withdraw, circuit breaker status, blocked deposit explanation, wallet balance
+- **Tenderly Transaction Simulator** — Preview deposit/withdraw/health-check outcomes via `eth_call` on the VNet before executing
 - **Reserve History Chart** — Time-series visualization of collateral ratio, reserves, and BTC price from on-chain history (3 views: ratio, reserves comparison, price)
 - **Contract Data Explorer** — Raw values from all 8+ contract calls, expandable
 - **Live Activity Log** — Real-time feed of all actions and data refreshes
@@ -407,17 +475,23 @@ proofofpulse/
 ├── frontend/                           # React + Vite + TypeScript dashboard
 │   ├── src/
 │   │   ├── App.tsx                     # Main app layout
-│   │   ├── hooks/useContracts.ts       # All contract reads, writes, wallet connection
+│   │   ├── hooks/
+│   │   │   ├── useContracts.ts         # All contract reads, writes, wallet connection
+│   │   │   └── useSimulation.ts        # Tenderly VNet transaction simulation logic
 │   │   ├── components/
 │   │   │   ├── ReserveCard.tsx         # Collateral ratio, BTC data, health badge
 │   │   │   ├── RiskCard.tsx            # AI risk score meter, recommendation
 │   │   │   ├── VaultCard.tsx           # PulseGuard vault, deposits, circuit breaker
+│   │   │   ├── TenderlySimulator.tsx   # Tenderly VNet transaction simulator
 │   │   │   ├── HistoryChart.tsx        # Time-series chart (recharts) from on-chain data
 │   │   │   ├── ContractExplorer.tsx    # Raw contract call values display
 │   │   │   └── ActivityLog.tsx         # Live activity feed
 │   │   ├── config/contracts.ts         # ABIs and deployed addresses
 │   │   └── utils.ts                    # BTC/USD formatters
 │   └── package.json
+├── simulate-workflow.sh                # Full 3-handler CRE simulation (auto-detects Tenderly)
+├── setup-tenderly.sh                   # Automated Tenderly VNet setup + deploy
+├── test-edge-cases.sh                  # Tenderly state override edge case testing
 ├── project.yaml                        # CRE project config (RPCs)
 ├── secrets.yaml                        # CRE secret references
 ├── .env.example                        # Environment variable template
