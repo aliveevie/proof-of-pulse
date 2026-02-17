@@ -1,12 +1,42 @@
-# ProofPulse — Cross-Chain WBTC Proof of Reserve with AI Risk Assessment
+<div align="center">
 
-**A custom Proof of Reserve data feed for Wrapped Bitcoin (WBTC), built on [Chainlink CRE](https://docs.chain.link/cre), combining multi-source on-chain verification with AI-powered anomaly detection and a DeFi circuit breaker.**
+<img src="https://img.shields.io/badge/Chainlink-CRE-375BD2?style=for-the-badge&logo=chainlink&logoColor=white" alt="Chainlink CRE" />
+<img src="https://img.shields.io/badge/Tenderly-VNet-7B3FE4?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4=&logoColor=white" alt="Tenderly VNet" />
+<img src="https://img.shields.io/badge/Gemini_AI-Risk_Engine-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini AI" />
+<img src="https://img.shields.io/badge/Solidity-0.8.24-363636?style=for-the-badge&logo=solidity&logoColor=white" alt="Solidity" />
+<img src="https://img.shields.io/badge/Tests-62%20Passing-2ea44f?style=for-the-badge" alt="62 Tests Passing" />
 
-ProofPulse monitors WBTC collateral health by independently verifying BTC reserves from the Bitcoin blockchain, comparing against both on-chain WBTC supply and the Chainlink PoR oracle feed, and using Google Gemini AI to detect anomalies — publishing verified results on-chain to Ethereum Sepolia. The **PulseGuard** vault contract consumes this data to automatically protect DeFi users by blocking deposits when reserves are unhealthy.
+<br /><br />
 
-## Why ProofPulse?
+# ProofPulse
 
-WBTC holds billions in value as the leading wrapped BTC on Ethereum, yet verifying its reserves requires trusting a single custodian's attestation. ProofPulse provides:
+**Cross-Chain WBTC Proof of Reserve · AI Risk Assessment · DeFi Circuit Breaker**
+
+A production-grade Proof of Reserve verification system for Wrapped Bitcoin, built on Chainlink's Compute Runtime Environment. ProofPulse independently verifies BTC reserves from the Bitcoin blockchain, cross-validates against on-chain WBTC supply and the Chainlink PoR oracle feed, runs AI-powered anomaly detection via Google Gemini, and publishes verified results on-chain — where the PulseGuard vault automatically protects DeFi users by blocking deposits when reserves are unhealthy.
+
+<br />
+
+[**Live Demo**](https://proof-of-pulse.ibxlab.com/) · [**Video Demo**](https://youtu.be/-WxFKCXXVgE) · [**CRE Integration PR**](https://github.com/aliveevie/proof-of-pulse/pull/1) · [**Tenderly Integration PR**](https://github.com/aliveevie/proof-of-pulse/pull/2)
+
+<br />
+
+<a href="https://youtu.be/-WxFKCXXVgE">
+  <img src="https://img.shields.io/badge/▶_Watch_Demo-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Demo on YouTube" />
+</a>
+&nbsp;
+<a href="https://proof-of-pulse.ibxlab.com/">
+  <img src="https://img.shields.io/badge/🌐_Live_Dashboard-proof--of--pulse.ibxlab.com-0070f3?style=for-the-badge" alt="Live Dashboard" />
+</a>
+
+</div>
+
+<br />
+
+---
+
+## Overview
+
+WBTC holds billions in value as the leading wrapped BTC on Ethereum, yet verifying its reserves requires trusting a single custodian's attestation. ProofPulse changes that:
 
 - **Independent verification** — reads BTC custody balances directly from Bitcoin via Blockstream, not from the custodian
 - **Cross-source validation** — compares independent data against the Chainlink PoR feed, alerting on >5% divergence
@@ -15,81 +45,7 @@ WBTC holds billions in value as the leading wrapped BTC on Ethereum, yet verifyi
 - **DeFi circuit breaker** — PulseGuard automatically pauses deposits when reserves are unhealthy, protecting users in real time
 - **Three trigger modes** — automated hourly updates, on-demand HTTP requests, and event-driven AI audits
 
-## Live Deployment (Sepolia)
-
-| Contract | Address | Etherscan |
-|----------|---------|-----------|
-| **WBTCProofOfReserve** | `0x4177bF2196151A05A51f7928988afd3Fe7B6e949` | [View](https://sepolia.etherscan.io/address/0x4177bF2196151A05A51f7928988afd3Fe7B6e949) |
-| **PulseGuard** | `0x887dC9BF62755dCbb0A3d93028fCAd741585106E` | [View](https://sepolia.etherscan.io/address/0x887dC9BF62755dCbb0A3d93028fCAd741585106E) |
-
-The frontend dashboard is a React + Vite app in [`frontend/`](frontend/). Run `cd frontend && npm install && npm run dev` to start it locally, then connect MetaMask to Sepolia to interact with the live contracts.
-
-## Tenderly Virtual TestNet
-
-ProofPulse supports deployment to a [Tenderly Virtual TestNet](https://docs.tenderly.co/virtual-testnets) — a fork of Sepolia with a built-in block explorer, contract verification, and unlimited faucet. This is ideal for testing the full CRE workflow end-to-end without spending real testnet ETH.
-
-### Prerequisites
-
-- **Tenderly Access Key** — Sign up at [dashboard.tenderly.co/register](https://dashboard.tenderly.co/register), then go to **Settings → Authorization → Generate Access Token**
-- Add to `.env`: `TENDERLY_ACCESS_KEY=your_token_here`
-
-### Quick Start
-
-```bash
-# 1. Create VNet, fund wallet, deploy + verify contracts
-./setup-tenderly.sh
-
-# 2. Load the Tenderly environment (RPC, contract addresses)
-source .env.tenderly
-
-# 3. Run the full 3-handler CRE workflow against Tenderly
-./simulate-workflow.sh --broadcast
-```
-
-The setup script will print a **Tenderly Explorer link** where you can view all transactions and verified contract source code.
-
-### How It Works
-
-- **Reads** (WBTC `totalSupply()`, Chainlink feed, Blockstream, CoinGecko) → **real Ethereum Mainnet** (unchanged)
-- **Writes** (reserve reports, risk assessments) → **Tenderly VNet** (forked Sepolia)
-
-When you `source .env.tenderly`, the `simulate-workflow.sh` script automatically uses the Tenderly RPC and contract addresses instead of Sepolia defaults. To also update `project.yaml`, `config.staging.json`, and the frontend config, run:
-
-```bash
-./setup-tenderly.sh --update-configs
-```
-
-This creates `.bak` backups of all modified files.
-
-### Deep Tenderly Integrations
-
-#### Transaction Simulator (Frontend)
-
-The dashboard includes a **Tenderly VNet Transaction Simulator** — a purple-themed card that previews any PulseGuard transaction before executing it on-chain. Select Deposit / Withdraw / Check Health, and the simulator runs a full EVM `eth_call` against the Tenderly VNet to show:
-
-- Whether the transaction would **succeed or revert**
-- **Decoded revert reasons** (e.g., `ReservesUnhealthy`, `CircuitBreakerIsActive`)
-- **Gas estimates** for successful transactions
-- **Live contract state** (depositsAllowed, isHealthy, collateral ratio, risk score, vault total)
-
-This demonstrates why Tenderly VNets are superior to regular testnets: full EVM simulation with zero gas cost and no state changes.
-
-#### Edge Case Testing with State Overrides
-
-```bash
-./test-edge-cases.sh
-```
-
-Uses `eth_call` state overrides (a Tenderly VNet capability) to test scenarios that are **impossible on regular Sepolia**:
-
-| Scenario | Override | Result |
-|----------|----------|--------|
-| **Undercollateralization** | `collateralRatioBps → 5000 (50%)` | `isHealthy()=false`, deposits blocked, deposit() reverts |
-| **AI Risk Spike** | `latestRisk.score → 95` | `checkHealth()` would trip circuit breaker |
-| **Combined Stress** | Both overrides simultaneously | Multi-layer protection validated |
-| **State Verification** | None | Confirms actual VNet state is unchanged |
-
-No mock contracts needed. No state mutations. The script directly overrides storage slots in `eth_call` to validate PulseGuard's circuit breaker protection against compound failures — then proves the real state was never touched.
+---
 
 ## Architecture
 
@@ -135,394 +91,322 @@ No mock contracts needed. No state mutations. The script directly overrides stor
    └──────────────────────────────────────────────────────────┘
 ```
 
-### Design Decisions
+---
 
-| Decision | Rationale |
-|----------|-----------|
-| **Three trigger types** | Cron for baseline monitoring, Log for user-initiated AI audits, HTTP for integrations |
-| **5% divergence threshold** | Balances sensitivity vs noise — accounts for timing differences between data sources |
-| **99% health threshold** | 1% buffer for BTC block confirmation lag vs WBTC mint/burn settlement timing |
-| **Gemini AI for risk** | Complements rule-based checks with pattern recognition across multiple data dimensions |
-| **Prefix-byte routing** | Single contract entry point with extensible report types (0x01 reserve, 0x02 risk) |
-| **Blockstream as BTC source** | Public, non-custodian data source — independent verification, not attestation |
-| **Withdrawals always allowed** | User safety first — PulseGuard never locks funds, only blocks new deposits |
+## Deployed Contracts (Sepolia)
 
-## Chainlink Integration
+| Contract | Address | Explorer |
+|----------|---------|----------|
+| **WBTCProofOfReserve** | `0x4177bF2196151A05A51f7928988afd3Fe7B6e949` | [Etherscan](https://sepolia.etherscan.io/address/0x4177bF2196151A05A51f7928988afd3Fe7B6e949) |
+| **PulseGuard** | `0x887dC9BF62755dCbb0A3d93028fCAd741585106E` | [Etherscan](https://sepolia.etherscan.io/address/0x887dC9BF62755dCbb0A3d93028fCAd741585106E) |
 
-### Files Using Chainlink
+**Tenderly VNet Deployments:**
 
-| File | Chainlink Usage |
-|------|----------------|
-| [`my-workflow/main.ts`](my-workflow/main.ts) | CRE SDK workflow — `CronCapability`, `EVMClient`, `HTTPClient`, `ConsensusAggregationByFields`, `Runner`, DON consensus for EVM reads, signed report generation via `runtime.report()` |
-| [`my-workflow/gemini.ts`](my-workflow/gemini.ts) | CRE SDK HTTP consensus — `HTTPClient.sendRequest()` with `ConsensusAggregationByFields` for Gemini AI calls |
-| [`contracts/src/WBTCProofOfReserve.sol`](contracts/src/WBTCProofOfReserve.sol) | CRE Receiver contract — extends `ReceiverTemplate` (Chainlink KeystoneForwarder access control) |
-| [`contracts/src/PulseGuard.sol`](contracts/src/PulseGuard.sol) | DeFi consumer of PoR data — reads `isHealthy()` and `getLatestRisk()` to gate vault operations |
-| [`contracts/src/interfaces/ReceiverTemplate.sol`](contracts/src/interfaces/ReceiverTemplate.sol) | Chainlink CRE interface — `IReceiver` implementation with forwarder authentication |
-| [`contracts/src/interfaces/IReceiver.sol`](contracts/src/interfaces/IReceiver.sol) | Chainlink CRE interface — `onReport()` standard |
-| [`contracts/abi/AggregatorV3.ts`](contracts/abi/AggregatorV3.ts) | Chainlink AggregatorV3 ABI — used to read `latestRoundData()` from the BTC reserve price feed |
-| [`contracts/abi/WBTCProofOfReserve.ts`](contracts/abi/WBTCProofOfReserve.ts) | ABI for the CRE Receiver contract |
-| [`my-workflow/workflow.yaml`](my-workflow/workflow.yaml) | CRE workflow configuration (staging/production targets) |
-| [`project.yaml`](project.yaml) | CRE project configuration (RPC endpoints, chain selectors) |
-| [`secrets.yaml`](secrets.yaml) | CRE secrets configuration |
+| Contract | Address |
+|----------|---------|
+| **WBTCProofOfReserve** | `0x3C4f266542EEE824303F39189CdeBF9530FEFd73` |
+| **PulseGuard** | `0x97999Af8E10B03A5f8eC8bC8ADFF7B0679b6EA11` |
 
-### CRE Capabilities Used
+---
 
-- **CronCapability** — Hourly scheduled PoR verification
-- **EVMClient.callContract()** — Read WBTC `totalSupply()` and Chainlink `latestRoundData()` with DON consensus
-- **EVMClient.logTrigger()** — Listen for `AuditRequested` events on Sepolia
-- **EVMClient.writeReport()** — Submit signed reports to the Receiver contract
-- **HTTPClient.sendRequest()** — Fetch BTC reserves and price with node consensus aggregation
-- **HTTPCapability** — On-demand HTTP trigger for ad-hoc PoR checks
-- **runtime.report()** — Generate signed EVM reports (ECDSA + keccak256)
-- **ConsensusAggregationByFields** — Median aggregation for numeric data, identical match for strings
+## Quick Start
 
-## Prerequisites
+### Prerequisites
 
 | Tool | Version | Install |
 |------|---------|---------|
 | **Bun** | 1.3+ | [bun.sh](https://bun.sh) |
 | **Foundry** (forge, cast) | Latest | [getfoundry.sh](https://getfoundry.sh) |
 | **CRE CLI** | 1.0.9+ | [CRE CLI releases](https://github.com/smartcontractkit/cre-cli/releases) |
-| **Node.js** | 18+ | [nodejs.org](https://nodejs.org) (for the frontend) |
+| **Node.js** | 18+ | [nodejs.org](https://nodejs.org) |
 
-## Setup
-
-### 1. Clone and install
+### 1. Clone & Install
 
 ```bash
-git clone <repo-url> && cd proofofpulse
+git clone https://github.com/aliveevie/proof-of-pulse.git && cd proof-of-pulse
 
-# Install CRE workflow dependencies
+# CRE workflow dependencies
 cd my-workflow && bun install && cd ..
 
-# Install frontend dependencies
+# Frontend dependencies
 cd frontend && npm install && cd ..
 ```
 
-### 2. Environment variables
+### 2. Configure Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your keys:
+Edit `.env`:
 
 ```env
-# Required: Ethereum private key (funded on Sepolia for broadcast mode)
+# Required — Ethereum private key (funded on Sepolia for broadcast mode)
 CRE_ETH_PRIVATE_KEY=your_private_key_here
 
 # Required for AI risk assessment (Handler 2)
 GEMINI_API_KEY_VAR=your_gemini_api_key_here
 ```
 
-Get a free Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+> Get a free Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 
-### 3. RPC endpoints
+### 3. Run the Full Simulation
 
-Public defaults are included in `project.yaml`. To use custom RPCs, edit:
-
-```yaml
-staging-settings:
-  rpcs:
-    - chain-name: ethereum-testnet-sepolia
-      url: https://ethereum-sepolia-rpc.publicnode.com
-    - chain-name: ethereum-mainnet
-      url: https://ethereum-rpc.publicnode.com
-```
-
-## Running the Project
-
-### Smart Contract Tests
+The simulation script runs all three CRE handlers end-to-end — preflight checks, live data fetching, DON consensus simulation, and on-chain verification:
 
 ```bash
-# Run all 62 tests (PoR: 29 tests, PulseGuard: 33 tests)
+# Simulation only (no on-chain writes)
+./simulate-workflow.sh
+
+# With broadcast (writes to Sepolia)
+./simulate-workflow.sh --broadcast
+```
+
+<details>
+<summary><strong>What the simulation does step by step</strong></summary>
+
+1. **Preflight checks** — validates `.env`, verifies CLI tools (`cre`, `cast`, `bun`, `expect`), pings deployed contracts, tests Gemini API key
+2. **Reads current on-chain state** — reserve snapshot count, deposit status, PulseGuard health
+3. **Handler 1 (Cron)** — fetches BTC reserves from Blockstream, price from CoinGecko, WBTC supply from Ethereum, Chainlink PoR feed → computes collateral ratio → signs `0x01` report
+4. **Handler 2 (Log)** — emits `AuditRequested` event on-chain, CRE log trigger picks it up, fetches fresh data, calls Gemini AI for risk score → signs `0x02` report
+5. **Handler 3 (HTTP)** — same as Handler 1 but via HTTP trigger for external integrations
+6. **On-chain verification** — reads back contract state to confirm `isHealthy()`, `depositsAllowed()`, and `riskThreshold()`
+
+</details>
+
+### 4. Run Smart Contract Tests
+
+```bash
+# All 62 tests (29 PoR + 33 PulseGuard)
 forge test -vvv --root contracts
-
-# Run only PoR tests
-forge test -vvv --root contracts --match-contract WBTCProofOfReserveTest
-
-# Run only PulseGuard tests
-forge test -vvv --root contracts --match-contract PulseGuardTest
-
-# Run a specific test
-forge test -vvv --root contracts --match-test test_fullScenario_healthyToUnhealthyAndBack
 ```
 
-### CRE Workflow Simulations
+### 5. Launch the Frontend
 
-All simulation commands run from the **project root**. Each simulates the full CRE workflow pipeline: data fetch → DON consensus → signed report generation → on-chain delivery.
+```bash
+cd frontend && npm run dev
+```
+
+Open `http://localhost:5173` and connect MetaMask to Sepolia.
 
 ---
 
-#### Handler 1 — Cron Trigger (Hourly PoR Update)
+## Tenderly Virtual TestNet
 
-Fetches live BTC reserves from Blockstream, BTC/USD price from CoinGecko, WBTC `totalSupply()` from Ethereum mainnet, and Chainlink `latestRoundData()` — then computes the collateral ratio and generates a signed 0x01 report.
+ProofPulse supports deployment to a [Tenderly Virtual TestNet](https://docs.tenderly.co/virtual-testnets) — a fork of Sepolia with a built-in block explorer, contract verification, and unlimited faucet.
 
 ```bash
-echo "1" | cre workflow simulate my-workflow
+# 1. Create VNet, fund wallet, deploy + verify contracts
+./setup-tenderly.sh
+
+# 2. Load the Tenderly environment
+source .env.tenderly
+
+# 3. Run the full 3-handler CRE workflow against Tenderly
+./simulate-workflow.sh --broadcast
+
+# 4. Test edge cases with state overrides
+./test-edge-cases.sh
 ```
 
-**Expected output:**
+### Transaction Simulator
 
-```
-[SIMULATION] Running trigger trigger=cron-trigger@1.0.0
-[USER LOG] Running CronTrigger — hourly PoR update
-[USER LOG] Fetching BTC reserves and price...
-[USER LOG] BTC reserves: 6820000677083 sats, price: 6875000 cents
-[USER LOG] WBTC supply: 12119565562622
-[USER LOG] Chainlink reserve: 15313507536303
-[USER LOG] Collateral ratio: 5627 bps
-[USER LOG] Report written: 0x000...
+The frontend includes a **Tenderly VNet Transaction Simulator** — preview any PulseGuard transaction before executing on-chain. Select Deposit / Withdraw / Check Health and see:
 
-Workflow Simulation Result:
- "PoR updated: ratio=5627bps"
-```
+- Whether the transaction would **succeed or revert**
+- **Decoded revert reasons** (e.g., `ReservesUnhealthy`, `CircuitBreakerIsActive`)
+- **Gas estimates** for successful transactions
+- **Live contract state** (depositsAllowed, isHealthy, collateral ratio, risk score)
+
+### Edge Case Testing with State Overrides
+
+`./test-edge-cases.sh` uses `eth_call` state overrides to test scenarios impossible on regular Sepolia:
+
+| Scenario | Override | Result |
+|----------|----------|--------|
+| **Undercollateralization** | `collateralRatioBps → 5000 (50%)` | `isHealthy()=false`, deposits blocked |
+| **AI Risk Spike** | `latestRisk.score → 95` | Circuit breaker would trip |
+| **Combined Stress** | Both overrides simultaneously | Multi-layer protection validated |
+| **Verification** | None | Confirms actual state unchanged |
 
 ---
 
-#### Handler 2 — Log Trigger (AI Risk Assessment with Gemini)
+## Data Sources
 
-This trigger listens for `AuditRequested` events on Sepolia. It fetches fresh reserve data, sends it to Google Gemini AI for analysis, and writes a signed 0x02 risk report.
-
-**Step 1: Emit an `AuditRequested` event on Sepolia**
-
-```bash
-source .env
-cast send 0x4177bF2196151A05A51f7928988afd3Fe7B6e949 \
-  "requestAudit(uint256)" 1 \
-  --rpc-url https://ethereum-sepolia-rpc.publicnode.com \
-  --private-key $CRE_ETH_PRIVATE_KEY
-```
-
-Copy the transaction hash from the output (e.g. `transactionHash  0xabc123...`).
-
-**Step 2: Simulate the CRE Log Trigger with that transaction**
-
-```bash
-expect -c '
-spawn cre workflow simulate my-workflow
-expect "Enter your choice"
-send "2\r"
-expect "Enter transaction hash"
-send "0x<PASTE_YOUR_TX_HASH_HERE>\r"
-expect "Enter event index"
-send "0\r"
-expect eof
-'
-```
-
-**Expected output:**
-
-```
-[SIMULATION] Running trigger trigger=evm:ChainSelector:...LogTrigger
-[USER LOG] Running LogTrigger — AI risk assessment
-[USER LOG] Fetching fresh reserve data for AI analysis...
-[USER LOG] Calling Gemini AI for risk assessment...
-[USER LOG] Gemini risk score: 25, recommendation: "Reserves appear adequate..."
-[USER LOG] Risk report written
-
-Workflow Simulation Result:
- "Risk assessed: score=25"
-```
-
-> **Note:** If Gemini returns 429 (rate limited), the workflow gracefully falls back to score=0 with a clear error message. This is intentional — the fallback is safe (score=0 means no risk detected).
+| Source | Data | Consensus |
+|--------|------|-----------|
+| **Blockstream API** | BTC custody address balances | Median aggregation |
+| **CoinGecko API** | BTC/USD price | Median aggregation |
+| **Ethereum Mainnet** | WBTC `totalSupply()` | DON consensus |
+| **Chainlink PoR Feed** | BTC reserve `latestRoundData()` | DON consensus |
+| **Google Gemini AI** | Risk score (0–100) + recommendation | Median (score) + identical (text) |
 
 ---
 
-#### Handler 3 — HTTP Trigger (On-Demand PoR Check)
+## Chainlink CRE Integration
 
-Same logic as Handler 1 but triggered on-demand via HTTP. Useful for integrations that need a fresh PoR check outside the hourly cron schedule.
+### CRE Capabilities Used
 
-```bash
-expect -c '
-spawn cre workflow simulate my-workflow
-expect "Enter your choice"
-send "3\r"
-expect "Enter your input"
-send "{}\r"
-expect eof
-'
-```
+| Capability | Usage |
+|-----------|-------|
+| **CronCapability** | Hourly scheduled PoR verification |
+| **EVMClient.callContract()** | Read WBTC `totalSupply()` and Chainlink `latestRoundData()` with DON consensus |
+| **EVMClient.logTrigger()** | Listen for `AuditRequested` events on Sepolia |
+| **EVMClient.writeReport()** | Submit signed reports to the Receiver contract |
+| **HTTPClient.sendRequest()** | Fetch BTC reserves and price with node consensus aggregation |
+| **HTTPCapability** | On-demand HTTP trigger for ad-hoc PoR checks |
+| **runtime.report()** | Generate signed EVM reports (ECDSA + keccak256) |
+| **ConsensusAggregationByFields** | Median aggregation for numeric data, identical match for strings |
 
-**Expected output:** Same as Handler 1 — fetches live data, computes ratio, generates signed report.
+### Files Using Chainlink
+
+| File | Usage |
+|------|-------|
+| [`my-workflow/main.ts`](my-workflow/main.ts) | CRE SDK workflow — 3 trigger handlers, DON consensus EVM reads, signed report generation |
+| [`my-workflow/gemini.ts`](my-workflow/gemini.ts) | CRE HTTPClient with ConsensusAggregationByFields for Gemini AI calls |
+| [`contracts/src/WBTCProofOfReserve.sol`](contracts/src/WBTCProofOfReserve.sol) | CRE Receiver — extends `ReceiverTemplate` (KeystoneForwarder access control) |
+| [`contracts/src/PulseGuard.sol`](contracts/src/PulseGuard.sol) | DeFi consumer — reads `isHealthy()` and `getLatestRisk()` to gate vault operations |
+| [`contracts/src/interfaces/ReceiverTemplate.sol`](contracts/src/interfaces/ReceiverTemplate.sol) | Chainlink CRE `IReceiver` with forwarder authentication |
+| [`contracts/abi/AggregatorV3.ts`](contracts/abi/AggregatorV3.ts) | Chainlink AggregatorV3 ABI for `latestRoundData()` |
 
 ---
 
-### Broadcast Mode (Live On-Chain Writes)
+## On-Chain Alerts
 
-In broadcast mode, the CRE simulation actually submits the signed report to the deployed contract on Sepolia. This writes real data on-chain.
+| Event | Trigger |
+|-------|---------|
+| **`UndercollateralizedAlert`** | Collateral ratio drops below 100% |
+| **`ChainlinkDivergenceAlert`** | Blockstream vs Chainlink reserves diverge >5% |
+| **`RiskUpdated`** | Gemini AI completes risk assessment |
+| **`CircuitBreakerTriggered`** | PulseGuard auto-pauses deposits |
 
-```bash
-# Broadcast a cron trigger (writes reserve data to Sepolia)
-echo "1" | cre workflow simulate my-workflow --broadcast
-```
+---
 
-After broadcast, verify the on-chain data:
+## End-to-End CRE Integration
 
-```bash
-# Read the latest reserve from the deployed contract
-cast call 0x4177bF2196151A05A51f7928988afd3Fe7B6e949 \
-  "getLatestReserve()" \
-  --rpc-url https://ethereum-sepolia-rpc.publicnode.com
+<table>
+<tr>
+<td>
 
-# Check if reserves are healthy
-cast call 0x4177bF2196151A05A51f7928988afd3Fe7B6e949 \
-  "isHealthy()" \
-  --rpc-url https://ethereum-sepolia-rpc.publicnode.com
+### [PR #1 — Full CRE Workflow Implementation](https://github.com/aliveevie/proof-of-pulse/pull/1)
 
-# Check the reserve history length
-cast call 0x4177bF2196151A05A51f7928988afd3Fe7B6e949 \
-  "getReserveHistoryLength()" \
-  --rpc-url https://ethereum-sepolia-rpc.publicnode.com
+Complete implementation of the 3-handler CRE workflow, Solidity contracts, React dashboard, and simulation infrastructure.
 
-# Check if PulseGuard allows deposits
-cast call 0x887dC9BF62755dCbb0A3d93028fCAd741585106E \
-  "depositsAllowed()" \
-  --rpc-url https://ethereum-sepolia-rpc.publicnode.com
+**Core CRE Workflow:**
+| File | What it does |
+|------|-------------|
+| `my-workflow/main.ts` | 3 trigger handlers — Cron, Log, HTTP — with DON consensus and signed report generation |
+| `my-workflow/gemini.ts` | Gemini AI integration with CRE HTTP consensus aggregation |
+| `my-workflow/workflow.yaml` | CRE workflow targets configuration |
+| `my-workflow/config.staging.json` | Runtime config — contract addresses, API URLs, chain selectors |
+| `project.yaml` | CRE project config with RPC endpoints |
+| `secrets.yaml` | CRE secret references |
 
-# Get full vault status
-cast call 0x887dC9BF62755dCbb0A3d93028fCAd741585106E \
-  "getVaultStatus()" \
-  --rpc-url https://ethereum-sepolia-rpc.publicnode.com
-```
+**Smart Contracts (62 tests):**
+| File | What it does |
+|------|-------------|
+| `contracts/src/WBTCProofOfReserve.sol` | CRE Receiver — prefix-byte routing, reserve + risk storage, health checks, alerts |
+| `contracts/src/PulseGuard.sol` | Circuit breaker vault — gates deposits on `isHealthy()` and AI risk score |
+| `contracts/src/interfaces/ReceiverTemplate.sol` | Chainlink KeystoneForwarder access control base |
+| `contracts/test/WBTCProofOfReserve.t.sol` | 29 tests — boundaries, overflow, edge cases |
+| `contracts/test/PulseGuard.t.sol` | 33 tests — deposits, withdrawals, circuit breaker |
 
-### Frontend Dashboard
+**Frontend Dashboard:**
+| File | What it does |
+|------|-------------|
+| `frontend/src/hooks/useContracts.ts` | All contract reads/writes, wallet connection, 30s auto-refresh |
+| `frontend/src/components/ReserveCard.tsx` | Collateral ratio, BTC data, health badge |
+| `frontend/src/components/RiskCard.tsx` | AI risk score meter, recommendation |
+| `frontend/src/components/VaultCard.tsx` | PulseGuard vault, deposits, circuit breaker |
+| `frontend/src/components/HistoryChart.tsx` | Time-series charts from on-chain history (Recharts) |
+| `frontend/src/components/ContractExplorer.tsx` | Raw contract call viewer |
+| `frontend/src/components/ActivityLog.tsx` | Live activity feed |
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+**Simulation:**
+| File | What it does |
+|------|-------------|
+| `simulate-workflow.sh` | Full 3-handler CRE simulation with preflight checks and on-chain verification |
 
-Open `http://localhost:5173` in a browser. Connect MetaMask to Sepolia to interact with the live contracts.
+</td>
+</tr>
+</table>
 
-**Dashboard features:**
-- **Reserve Health** — Collateral ratio with progress bar, BTC reserves vs WBTC supply, Chainlink comparison, health badge
-- **AI Risk Assessment** — Gemini risk score meter (0-100), recommendation text, Request AI Audit button
-- **PulseGuard Vault** — Deposit/withdraw, circuit breaker status, blocked deposit explanation, wallet balance
-- **Tenderly Transaction Simulator** — Preview deposit/withdraw/health-check outcomes via `eth_call` on the VNet before executing
-- **Reserve History Chart** — Time-series visualization of collateral ratio, reserves, and BTC price from on-chain history (3 views: ratio, reserves comparison, price)
-- **Contract Data Explorer** — Raw values from all 8+ contract calls, expandable
-- **Live Activity Log** — Real-time feed of all actions and data refreshes
+<table>
+<tr>
+<td>
 
-To build for production: `npm run build` (outputs to `frontend/dist/`).
+### [PR #2 — Tenderly Virtual TestNet Integration](https://github.com/aliveevie/proof-of-pulse/pull/2)
 
-### Deploying Contracts
+Deep Tenderly integration — transaction simulation, state override edge case testing, and one-command VNet deployment.
 
-The PoR contract and PulseGuard are already deployed on Sepolia. To redeploy:
+**New Files:**
+| File | What it does |
+|------|-------------|
+| `setup-tenderly.sh` | One-command VNet creation, wallet funding, contract deployment + verification |
+| `test-edge-cases.sh` | State override edge case testing (4 scenarios) |
+| `contracts/script/Deploy.s.sol` | Foundry deploy script with Sepolia KeystoneForwarder |
+| `frontend/src/components/TenderlySimulator.tsx` | Transaction simulation UI with Tenderly branding |
+| `frontend/src/hooks/useSimulation.ts` | EVM `eth_call` simulation logic |
 
-```bash
-source .env
+**Modified Files:**
+| File | Change |
+|------|--------|
+| `simulate-workflow.sh` | Auto-loads `.env.tenderly`, adds Tenderly Explorer TX links |
+| `frontend/src/App.tsx` | Added simulator component |
+| `frontend/src/index.css` | Tenderly simulator styles (purple accent) |
+| `frontend/src/config/contracts.ts` | Tenderly VNet RPC + contract addresses |
+| `project.yaml` | Staging RPC pointed to Tenderly VNet |
+| `my-workflow/config.staging.json` | PoR contract address for Tenderly deployment |
 
-# Deploy WBTCProofOfReserve (replace FORWARDER with CRE KeystoneForwarder address)
-forge create --private-key "$CRE_ETH_PRIVATE_KEY" \
-  --rpc-url "https://ethereum-sepolia-rpc.publicnode.com" \
-  --broadcast \
-  src/WBTCProofOfReserve.sol:WBTCProofOfReserve \
-  --constructor-args "FORWARDER_ADDRESS"
+</td>
+</tr>
+</table>
 
-# Deploy PulseGuard (with PoR address and risk threshold 70)
-forge create --private-key "$CRE_ETH_PRIVATE_KEY" \
-  --rpc-url "https://ethereum-sepolia-rpc.publicnode.com" \
-  --broadcast \
-  src/PulseGuard.sol:PulseGuard \
-  --constructor-args "POR_ADDRESS" "70"
-```
-
-### Interacting with Deployed Contracts (cast)
-
-```bash
-source .env
-RPC="https://ethereum-sepolia-rpc.publicnode.com"
-POR="0x4177bF2196151A05A51f7928988afd3Fe7B6e949"
-GUARD="0x887dC9BF62755dCbb0A3d93028fCAd741585106E"
-
-# Request an AI audit (emits AuditRequested event for CRE Log Trigger)
-cast send $POR "requestAudit(uint256)" 42 --rpc-url $RPC --private-key $CRE_ETH_PRIVATE_KEY
-
-# Try depositing into PulseGuard (will revert if reserves are unhealthy)
-cast send $GUARD "deposit()" --value 0.001ether --rpc-url $RPC --private-key $CRE_ETH_PRIVATE_KEY
-
-# Trigger a health check on PulseGuard (trips circuit breaker if unhealthy)
-cast send $GUARD "checkHealth()" --rpc-url $RPC --private-key $CRE_ETH_PRIVATE_KEY
-
-# Withdraw from PulseGuard (always succeeds — user safety first)
-cast send $GUARD "withdraw(uint256)" 1000000000000000 --rpc-url $RPC --private-key $CRE_ETH_PRIVATE_KEY
-```
+---
 
 ## Project Structure
 
 ```
-proofofpulse/
-├── contracts/                          # Foundry smart contract project
+proof-of-pulse/
+├── contracts/                          # Foundry smart contracts
 │   ├── src/
-│   │   ├── WBTCProofOfReserve.sol      # CRE Receiver: reserve + risk storage, alerts
-│   │   ├── PulseGuard.sol              # DeFi circuit breaker vault consuming PoR data
-│   │   └── interfaces/
-│   │       ├── IReceiver.sol           # Chainlink CRE standard interface
-│   │       └── ReceiverTemplate.sol    # Forwarder-only access control base
-│   ├── test/
-│   │   ├── WBTCProofOfReserve.t.sol    # 29 tests (boundaries, overflow, edge cases)
-│   │   └── PulseGuard.t.sol            # 33 tests (deposits, withdrawals, circuit breaker)
-│   ├── abi/                            # TypeScript ABI exports for workflow
-│   └── foundry.toml
+│   │   ├── WBTCProofOfReserve.sol      # CRE Receiver — reserve + risk storage
+│   │   ├── PulseGuard.sol              # DeFi circuit breaker vault
+│   │   └── interfaces/                 # Chainlink CRE interfaces
+│   ├── test/                           # 62 Solidity tests
+│   ├── script/Deploy.s.sol             # Foundry deployment script
+│   └── abi/                            # TypeScript ABI exports
 ├── my-workflow/                        # CRE TypeScript workflow
-│   ├── main.ts                         # Three trigger handlers (cron, log, http)
-│   ├── gemini.ts                       # Gemini AI integration with consensus
-│   ├── workflow.yaml                   # CRE workflow targets
-│   ├── config.staging.json             # Staging config
-│   └── config.production.json          # Production config
+│   ├── main.ts                         # 3 trigger handlers (cron, log, http)
+│   ├── gemini.ts                       # Gemini AI with CRE consensus
+│   ├── workflow.yaml                   # CRE workflow config
+│   └── config.staging.json             # Runtime config
 ├── frontend/                           # React + Vite + TypeScript dashboard
 │   ├── src/
-│   │   ├── App.tsx                     # Main app layout
-│   │   ├── hooks/
-│   │   │   ├── useContracts.ts         # All contract reads, writes, wallet connection
-│   │   │   └── useSimulation.ts        # Tenderly VNet transaction simulation logic
-│   │   ├── components/
-│   │   │   ├── ReserveCard.tsx         # Collateral ratio, BTC data, health badge
-│   │   │   ├── RiskCard.tsx            # AI risk score meter, recommendation
-│   │   │   ├── VaultCard.tsx           # PulseGuard vault, deposits, circuit breaker
-│   │   │   ├── TenderlySimulator.tsx   # Tenderly VNet transaction simulator
-│   │   │   ├── HistoryChart.tsx        # Time-series chart (recharts) from on-chain data
-│   │   │   ├── ContractExplorer.tsx    # Raw contract call values display
-│   │   │   └── ActivityLog.tsx         # Live activity feed
-│   │   ├── config/contracts.ts         # ABIs and deployed addresses
-│   │   └── utils.ts                    # BTC/USD formatters
-│   └── package.json
-├── simulate-workflow.sh                # Full 3-handler CRE simulation (auto-detects Tenderly)
-├── setup-tenderly.sh                   # Automated Tenderly VNet setup + deploy
-├── test-edge-cases.sh                  # Tenderly state override edge case testing
-├── project.yaml                        # CRE project config (RPCs)
-├── secrets.yaml                        # CRE secret references
-├── .env.example                        # Environment variable template
-└── CLAUDE.md                           # Development guide
+│   │   ├── components/                 # Reserve, Risk, Vault, Chart, Simulator
+│   │   ├── hooks/                      # useContracts, useSimulation
+│   │   └── config/contracts.ts         # ABIs and addresses
+├── simulate-workflow.sh                # Full 3-handler CRE simulation
+├── setup-tenderly.sh                   # Tenderly VNet setup + deploy
+├── test-edge-cases.sh                  # State override edge case testing
+├── project.yaml                        # CRE project config
+└── secrets.yaml                        # CRE secret references
 ```
 
-## Data Sources
+---
 
-| Source | Data | Access Method | Consensus |
-|--------|------|---------------|-----------|
-| **Blockstream API** | BTC custody address balances | HTTP (node mode) | Median aggregation |
-| **CoinGecko API** | BTC/USD price | HTTP (node mode) | Median aggregation |
-| **Ethereum Mainnet** | WBTC `totalSupply()` | EVM read (DON mode) | Built-in DON consensus |
-| **Chainlink PoR Feed** | BTC reserve `latestRoundData()` | EVM read (DON mode) | Built-in DON consensus |
-| **Google Gemini AI** | Risk score + recommendation | HTTP (node mode) | Median (score) + identical (text) |
+## Design Decisions
 
-## On-Chain Alerts
+| Decision | Rationale |
+|----------|-----------|
+| **Three trigger types** | Cron for baseline monitoring, Log for user-initiated AI audits, HTTP for integrations |
+| **5% divergence threshold** | Balances sensitivity vs noise — accounts for timing differences between sources |
+| **99% health threshold** | 1% buffer for BTC block confirmation lag vs WBTC mint/burn settlement |
+| **Prefix-byte routing** | Single contract entry point with extensible report types (`0x01` reserve, `0x02` risk) |
+| **Blockstream as BTC source** | Public, non-custodian data — independent verification, not attestation |
+| **Withdrawals always allowed** | User safety first — PulseGuard never locks funds, only blocks new deposits |
 
-The smart contract automatically emits alerts:
-
-- **`UndercollateralizedAlert`** — When collateral ratio drops below 100% (BTC reserves < WBTC supply)
-- **`ChainlinkDivergenceAlert`** — When independently-verified BTC reserves diverge from Chainlink's feed by >5%
-- **`RiskUpdated`** — When Gemini AI completes a risk assessment (score 0=safe, 100=critical)
-- **`CircuitBreakerTriggered`** — When PulseGuard auto-pauses deposits due to unhealthy reserves or high AI risk
-
-DeFi protocols can subscribe to these events to automatically pause lending, adjust LTVs, or trigger liquidation safeguards.
-
-## Rate Limits
-
-- **CoinGecko free tier**: ~10 requests/minute. Space out trigger simulations.
-- **Gemini free tier**: Limited RPM. The workflow gracefully handles 429 errors with a safe fallback (score=0, "API unavailable").
+---
 
 ## License
 
